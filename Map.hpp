@@ -7,7 +7,6 @@
 #pragma GCC diagnostic ignored "-Wunknown-pragmas"     //tells clang to ignore the next pragma
 #pragma GCC diagnostic ignored "-Wnon-template-friend" //ignore spurious warnings about non-templated friend functions
 
-
 namespace cs540 {
   template <typename Key_T, typename Mapped_T>
   class Map {
@@ -22,7 +21,6 @@ namespace cs540 {
   private:
     class SentinelNode;
     class DataNode;
-    //************************************
 
     //MAP METHOD PROTOTYPES
     //Constructors and Assignment Operator
@@ -64,6 +62,10 @@ namespace cs540 {
     void                    erase  (const Key_T &);
     void                    clear  ();
     //************************************
+
+    void print() const;
+    void traceInsert(const ValueType &);
+
 
     //Comparison
     friend bool operator== (const Map &lhs, const Map &rhs) {
@@ -202,6 +204,11 @@ namespace cs540 {
     size_t numNodes;
     int height;
 
+    //for randomly generating insert height
+    std::random_device r;
+    std::default_random_engine e;
+    //************************************
+
     class SentinelNode {
     public:
       SentinelNode() : prev(nullptr) {
@@ -231,6 +238,8 @@ namespace cs540 {
     for (int curLevel = 0; curLevel < MAX_LEVELS; ++curLevel)
       head->nextNodes[curLevel] = static_cast<DataNode*>(tail);
     tail->prev = static_cast<DataNode*>(head);
+    
+    e.seed(r());
   }   
 
   template <typename Key_T, typename Mapped_T>
@@ -242,6 +251,7 @@ namespace cs540 {
     for (int curLevel = 0; curLevel < MAX_LEVELS; ++curLevel)
       head->nextNodes[curLevel] = static_cast<DataNode*>(tail);
     tail->prev = static_cast<DataNode*>(head);
+    e.seed(r());
     
     DataNode *trav = mapIn.head->nextNodes[0];
     while (trav != static_cast<DataNode*>(mapIn.tail)) {
@@ -272,6 +282,7 @@ namespace cs540 {
   Map<Key_T, Mapped_T>::Map(std::initializer_list<std::pair<const Key_T, Mapped_T>> initList) {
     numNodes = 0;
     height = 0;
+    e.seed(r);
     head = new SentinelNode;
     tail = new SentinelNode;
     for (int curLevel = 0; curLevel < MAX_LEVELS; ++curLevel)
@@ -400,40 +411,103 @@ namespace cs540 {
       std::pair<typename Map<Key_T, Mapped_T>::Iterator, bool>retPair = {findIt, false};
       return retPair;
     }
-    //randomly generate insert height
-    std::random_device r;
-    std::default_random_engine e(r());
     std::uniform_int_distribution<int> u(0,1);
-    int insertHeight = 0;
+    int insertHeight = 1;
     bool repeat = true;
    
     while (repeat && insertHeight < MAX_LEVELS) {
       repeat = u(e);
       insertHeight++;
-    }
+     }
+
 
     DataNode *newNode = new DataNode(valueIn);
     ++numNodes;
     if (insertHeight > height)
       height = insertHeight;
 
-    int curLevel = insertHeight - 1;
+
+    //int curLevel = insertHeight - 1;
+    int curLevel = height - 1;
     DataNode *trav = static_cast<DataNode*>(head);
+    DataNode *tmp;
+    
     while (curLevel >= 0) {
       while (trav->nextNodes[curLevel] != static_cast<DataNode*>(tail) && trav->nextNodes[curLevel]->value.first < valueIn.first)
 	trav = trav->nextNodes[curLevel];
-      DataNode *tmp = trav->nextNodes[curLevel];
-      trav->nextNodes[curLevel] = newNode;
-      newNode->nextNodes[curLevel] = tmp;
-      if (curLevel == 0) {
-	tmp->prev = newNode;
-	newNode->prev = trav;
+      if (curLevel < insertHeight) {
+	tmp = trav->nextNodes[curLevel];
+	trav->nextNodes[curLevel] = newNode;
+	newNode->nextNodes[curLevel] = tmp;
+	if (curLevel == 0) {
+	  tmp->prev = newNode;
+	  newNode->prev = trav;
+	}
       }
       --curLevel;
     }
+    
     std::pair<Map<Key_T, Mapped_T>::Iterator, bool> retPair ({newNode}, true);
     return retPair;
   }
+
+  template <typename Key_T, typename Mapped_T>
+  void  Map<Key_T, Mapped_T>::traceInsert(const ValueType &valueIn) {
+    //check that valueIn.key is not already in map
+    auto findIt = find(valueIn.first);
+    if (findIt != end()) {
+      //std::pair<typename Map<Key_T, Mapped_T>::Iterator, bool>retPair = {findIt, false};
+      //return retPair;
+      return;
+    }
+    
+
+    int insertHeight = 1;
+    bool repeat = true;
+    std::uniform_int_distribution<int> u(0,1);    
+
+    while (repeat && insertHeight < MAX_LEVELS) {
+      repeat = u(e);
+      insertHeight++;
+    }
+    
+    printf("inserting %d at height %d\n", valueIn.first, insertHeight);
+
+    DataNode *newNode = new DataNode(valueIn);
+    ++numNodes;
+    if (insertHeight > height)
+      height = insertHeight;
+ 
+    //int curLevel = insertHeight - 1;
+    int curLevel = height - 1;
+    DataNode *trav = static_cast<DataNode*>(head);
+    DataNode *tmp;
+    
+    while (curLevel >= 0) {
+      //printf("at level %d\n", curLevel);
+      while (trav->nextNodes[curLevel] != static_cast<DataNode*>(tail) && trav->nextNodes[curLevel]->value.first < valueIn.first) {
+	printf("moving to level %d node %d\n", curLevel, trav->nextNodes[curLevel]->value.first);
+	trav = trav->nextNodes[curLevel];
+	//printf("moving to node %d\n", trav->value.first);
+      }
+      if (curLevel < insertHeight) {
+	tmp = trav->nextNodes[curLevel];
+	trav->nextNodes[curLevel] = newNode;
+	newNode->nextNodes[curLevel] = tmp;
+	if (curLevel == 0) {
+	  tmp->prev = newNode;
+	  newNode->prev = trav;
+	}
+      }
+      --curLevel;
+    }
+    printf("\n");
+
+
+  }
+
+
+
   
   template <typename Key_T, typename Mapped_T>
   template <typename IT_T>
@@ -497,6 +571,29 @@ namespace cs540 {
     height = 0;
     numNodes = 0;
   }
+
+  template <typename Key_T, typename Mapped_T>
+  void Map<Key_T, Mapped_T>::print() const {
+    DataNode *trav;
+    printf("numNodes=%lu, height=%d\n", numNodes, height);
+    for(int i = height - 1; i >= 0; --i) {
+      printf("level %d:", i);
+      trav = head->nextNodes[i];
+      while (trav != static_cast<DataNode*>(tail)) {
+	printf("-->{%d, %d}", trav->value.first, trav->value.second);
+	trav = trav->nextNodes[i];
+      }
+      printf("\n");
+    }
+    printf("reverse level 0:");
+    trav = tail->prev;
+    while (trav != static_cast<DataNode*>(head)) {
+      printf("-->{%d, %d}", trav->value.first, trav->value.second);
+      trav = trav->prev;
+    }
+    printf("\n**************************\n");
+  }
+
 
   template<typename Key_T, typename Mapped_T>
   typename Map<Key_T, Mapped_T>::Iterator &Map<Key_T, Mapped_T>::Iterator::operator++() {
